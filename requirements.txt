@@ -1,0 +1,7 @@
+python-telegram-bot==20.3
+python-dotenv==1.0.0
+gspread==5.7.0
+google-api-python-client==2.84.0
+google-auth-oauthlib==1.0.0
+google-auth==2.16.0
+uuid==1.30
