@@ -629,7 +629,21 @@ def main() -> None:
 
     asyncio.run(run())
 
-if __name__ == "__main__":
-    main()
+application = None
+
+def main() -> None:
+    global application
+    application = (
+        ApplicationBuilder()
+        .token(BOT_TOKEN)
+        .read_timeout(30)
+        .write_timeout(30)
+        .concurrent_updates(True)
+        .build()
+    )
+    ...
+    asyncio.run(run())
+
+main()
 
 
