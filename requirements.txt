@@ -1,9 +1,9 @@
-python-dotenv==1.0.0
-gspread>=5.8.0
-google-api-python-client==2.84.0
 google-auth-oauthlib==1.0.0
-google-auth==2.16.0
 flask
-python-telegram-bot==20.7
 fastapi
 uvicorn
+python-telegram-bot==20.5
+python-dotenv==1.0.0
+gspread==5.7.2
+google-api-python-client==2.96.0
+google-auth==2.22.0
