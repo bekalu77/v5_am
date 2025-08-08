@@ -631,40 +631,40 @@ async def main():
     application.add_handler(conv_handler)
 
     # Webhook configuration for production (Render)
-        if WEBHOOK_URL:
-            logger.info("Configuring webhook...")
-            
-            await application.bot.set_webhook(
-                url=f"{WEBHOOK_URL}/webhook",
-                secret_token=SECRET_TOKEN,
-                drop_pending_updates=True
-            )
-            
-            logger.info(f"Webhook configured with secret token (last 5 chars): {SECRET_TOKEN[-5:]}")
-            logger.info(f"Webhook URL: {WEBHOOK_URL}/webhook")
-            
-            # Create a new event loop for webhook
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            
-            try:
-                await application.run_webhook(
-                    listen="0.0.0.0",
-                    port=PORT,
-                    webhook_url=f"{WEBHOOK_URL}/webhook",
-                    secret_token=SECRET_TOKEN,
-                    drop_pending_updates=True
-                )
-            finally:
-                loop.close()
-        else:
-            # Polling mode for development
-            logger.info("Starting in polling mode")
-            await application.run_polling(drop_pending_updates=True)
-            
-    except Exception as e:
-        logger.error(f"Bot crashed: {e}")
-        raise
+if WEBHOOK_URL:
+    logger.info("Configuring webhook...")
+    
+    await application.bot.set_webhook(
+        url=f"{WEBHOOK_URL}/webhook",
+        secret_token=SECRET_TOKEN,
+        drop_pending_updates=True
+    )
+    
+    logger.info(f"Webhook configured with secret token (last 5 chars): {SECRET_TOKEN[-5:]}")
+    logger.info(f"Webhook URL: {WEBHOOK_URL}/webhook")
+    
+    # Create a new event loop for webhook
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    
+    try:
+        await application.run_webhook(
+            listen="0.0.0.0",
+            port=PORT,
+            webhook_url=f"{WEBHOOK_URL}/webhook",
+            secret_token=SECRET_TOKEN,
+            drop_pending_updates=True
+        )
+    finally:
+        loop.close()
+else:
+    # Polling mode for development
+    logger.info("Starting in polling mode")
+    await application.run_polling(drop_pending_updates=True)
+    
+except Exception as e:
+logger.error(f"Bot crashed: {e}")
+raise
 
 if __name__ == "__main__":
     # Configure logging
