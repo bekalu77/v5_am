@@ -144,7 +144,14 @@ async def post(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         reply_markup=RENT_SELL_BUTTONS
     )
     return RENT_SELL
-
+    
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Send help message from TEXTS without footer"""
+    await update.message.reply_text(
+        TEXTS["messages"]["help"], 
+        parse_mode=ParseMode.HTML
+    )
+    
 async def get_rent_sell(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     context.user_data["rent_or_sell"] = update.message.text
     await retry_telegram_request(
@@ -269,9 +276,9 @@ async def get_contact(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
         elif digits.startswith("9") and len(digits) == 9:
             normalized = " 0" + digits  # 911223344 →  0911223344
         elif digits.startswith("0") and len(digits) == 10:
-            normalized = " " + digits  # 0911223344 →  0911223344
+            normalized = "  " + digits  # 0911223344 →  0911223344
         else:
-            normalized = " " + raw_phone  # fallback
+            normalized = "  " + raw_phone  # fallback
             
         context.user_data["contact"] = normalized
     else:
@@ -395,7 +402,7 @@ async def preview_listing(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     username = update.message.from_user.username or str(data["posted_by"])
     caption += TEXTS["messages"]["posted_by"].format(esc(username))
     caption += TEXTS["messages"]["date"].format(esc(data["date"]))
-    
+    caption += "\n\n" + TEXTS["messages"]["footer"]
     # Send preview
     if data.get("photos"):
         try:
@@ -482,6 +489,7 @@ async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         username = update.message.from_user.username or str(data["posted_by"])
         channel_caption += TEXTS["messages"]["posted_by"].format(esc(username))
         channel_caption += TEXTS["messages"]["date"].format(esc(data["date"]))
+        channel_caption += "\n\n" + TEXTS["messages"]["footer"]
         
         # Determine which channel to post to based on rent/sell
         channel_id = CHANNEL_ID2 if data["rent_or_sell"] == TEXTS["buttons"]["sell"] else CHANNEL_ID
@@ -595,6 +603,7 @@ def main() -> None:
     )
     
     application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("help", help_command))
     application.add_handler(conv_handler)
 
     logger.info("Bot is running...")
@@ -602,3 +611,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
