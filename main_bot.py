@@ -578,6 +578,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 logger = logging.getLogger(__name__)
 
 async def main():
+    # Initialize the Application
     application = (
         ApplicationBuilder()
         .token(BOT_TOKEN)
@@ -587,6 +588,7 @@ async def main():
         .build()
     )
 
+    # Set up conversation handler (keep your existing conv_handler code)
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("post", post)],
         states={
@@ -620,18 +622,20 @@ async def main():
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(conv_handler)
 
-    # Set webhook URL first
-    await application.bot.set_webhook(f"{WEBHOOK_URL}/webhook")
-    logger.info(f"Webhook set to {WEBHOOK_URL}/webhook")
-
-    # Run webhook server
-    await application.run_webhook(
-        listen="0.0.0.0",
-        port=PORT,
-        webhook_path="/webhook",
-        webhook_url=f"{WEBHOOK_URL}/webhook",
-    )
-
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
-    asyncio.run(main())
+    # Webhook configuration for Render
+    if WEBHOOK_URL:
+        await application.bot.set_webhook(f"{WEBHOOK_URL}/webhook")
+        logger.info(f"Webhook set to {WEBHOOK_URL}/webhook")
+        
+        # Run webhook server
+        await application.run_webhook(
+            listen="0.0.0.0",
+            port=PORT,
+            webhook_url=f"{WEBHOOK_URL}/webhook",
+            secret_token='YOUR_SECRET_TOKEN',  # Add for security
+            drop_pending_updates=True
+        )
+    else:
+        # Fallback to polling if no webhook URL is set
+        logger.info("Starting bot in polling mode")
+        await application.run_polling(drop_pending_updates=True)
