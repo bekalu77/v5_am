@@ -27,10 +27,7 @@ import gspread
 from datetime import datetime
 from googleapiclient.discovery import build
 from google.oauth2.service_account import Credentials
-
-# Import Amharic translations
 from texts_am import TEXTS
-from flask import Flask, request
 
 # Load environment variables
 load_dotenv()
@@ -39,16 +36,17 @@ CHANNEL_ID = os.getenv("CHANNEL_ID")  # For rentals
 CHANNEL_ID2 = os.getenv("CHANNEL_ID2")  # For sales
 CREDENTIALS_JSON = os.getenv("GOOGLE_CREDENTIALS_JSON", "credentials.json")
 PORT = int(os.environ.get("PORT", 10000))
-WEBHOOK_URL = os.environ.get("WEBHOOK_URL")  # Set this in your .env or Render environment
+WEBHOOK_URL = os.environ.get("WEBHOOK_URL")  # Webhook URL from Render
+SECRET_TOKEN = os.environ.get("SECRET_TOKEN", str(uuid.uuid4()))  # Random secret if not set
 
-# Logging
+# Logging configuration
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
-# Google Sheets setup
+# Google Sheets setup (keep your existing setup)
 try:
     gc = gspread.service_account(CREDENTIALS_JSON)
     SHEET_NAME = "RentalListings"
@@ -59,7 +57,7 @@ except Exception as e:
     logger.error(f"Error setting up Google Sheets: {e}")
     raise SystemExit("Failed to initialize Google Sheets connection.")
 
-# Initialize Google Drive API
+# Initialize Google Drive API (keep your existing setup)
 try:
     creds = Credentials.from_service_account_file(CREDENTIALS_JSON)
     drive_service = build('drive', 'v3', credentials=creds)
@@ -67,6 +65,7 @@ try:
 except Exception as e:
     logger.error(f"Error setting up Google Drive: {e}")
     drive_service = None
+
 
 # Sheet headers
 HEADERS = [
@@ -578,6 +577,15 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 logger = logging.getLogger(__name__)
 
 async def main():
+    """Main function to start the bot with proper webhook or polling setup"""
+    
+    # Validate required environment variables
+    if not BOT_TOKEN:
+        raise ValueError("No BOT_TOKEN set in environment variables")
+    
+    if WEBHOOK_URL and not WEBHOOK_URL.startswith(('http://', 'https://')):
+        raise ValueError("WEBHOOK_URL must start with http:// or https://")
+
     # Initialize the Application
     application = (
         ApplicationBuilder()
@@ -622,20 +630,72 @@ async def main():
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(conv_handler)
 
-    # Webhook configuration for Render
+    # Webhook configuration for production (Render)
     if WEBHOOK_URL:
-        await application.bot.set_webhook(f"{WEBHOOK_URL}/webhook")
-        logger.info(f"Webhook set to {WEBHOOK_URL}/webhook")
+        logger.info("Configuring webhook...")
         
-        # Run webhook server
-        await application.run_webhook(
-            listen="0.0.0.0",
-            port=PORT,
-            webhook_url=f"{WEBHOOK_URL}/webhook",
-            secret_token='YOUR_SECRET_TOKEN',  # Add for security
+        # Set webhook with secret token
+        await application.bot.set_webhook(
+            url=f"{WEBHOOK_URL}/webhook",
+            secret_token=SECRET_TOKEN,
             drop_pending_updates=True
         )
+        
+        logger.info(f"Webhook configured with secret token (last 5 chars): {SECRET_TOKEN[-5:]}")
+        logger.info(f"Webhook URL: {WEBHOOK_URL}/webhook")
+        
+        # Create a simple web server for Render health checks
+        from aiohttp import web
+        
+        async def handle_health_check(request):
+            return web.Response(text="Bot is running")
+        
+        app = web.Application()
+        app.router.add_get("/health", handle_health_check)
+        
+        # Start web server and webhook
+        runner = web.AppRunner(app)
+        await runner.setup()
+        site = web.TCPSite(runner, "0.0.0.0", PORT)
+        
+        try:
+            await site.start()
+            logger.info(f"Health check server running on port {PORT}")
+            
+            # Run application with webhook
+            await application.run_webhook(
+                listen="0.0.0.0",
+                port=PORT,
+                webhook_url=f"{WEBHOOK_URL}/webhook",
+                secret_token=SECRET_TOKEN,
+                drop_pending_updates=True
+            )
+        except asyncio.CancelledError:
+            logger.info("Shutting down gracefully...")
+        finally:
+            await runner.cleanup()
+            
     else:
-        # Fallback to polling if no webhook URL is set
-        logger.info("Starting bot in polling mode")
-        await application.run_polling(drop_pending_updates=True)
+        # Polling mode for development
+        logger.info("Starting in polling mode (no WEBHOOK_URL set)")
+        await application.run_polling(
+            drop_pending_updates=True,
+            allowed_updates=Update.ALL_TYPES
+        )
+
+async def shutdown():
+    """Cleanup function for graceful shutdown"""
+    logger.info("Performing cleanup before shutdown...")
+    # Add any cleanup logic here if needed
+
+if __name__ == "__main__":
+    try:
+        logger.info("Starting bot...")
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logger.info("Bot stopped by user")
+    except Exception as e:
+        logger.error(f"Bot crashed: {e}")
+        raise
+    finally:
+        asyncio.run(shutdown())
