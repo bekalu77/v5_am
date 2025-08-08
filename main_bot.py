@@ -4,6 +4,7 @@ import html
 import re
 import uuid
 import asyncio
+import telegram
 from dotenv import load_dotenv
 from telegram import (
     Update,
@@ -30,8 +31,6 @@ from google.oauth2.service_account import Credentials
 # Import Amharic translations
 from texts_am import TEXTS
 from flask import Flask, request
-import telegram
-
 
 # Load environment variables
 load_dotenv()
@@ -572,7 +571,13 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     context.user_data.clear()
     return ConversationHandler.END
 
-def main() -> None:
+
+
+# Assuming other imports and handlers like start, post, get_rent_sell, etc., are defined above
+
+logger = logging.getLogger(__name__)
+
+async def main():
     application = (
         ApplicationBuilder()
         .token(BOT_TOKEN)
@@ -595,55 +600,38 @@ def main() -> None:
             INFO: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_info)],
             CONTACT: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, get_contact),
-                MessageHandler(filters.CONTACT, get_contact)
+                MessageHandler(filters.CONTACT, get_contact),
             ],
             PHOTOS: [
                 MessageHandler(filters.PHOTO, get_photos),
-                MessageHandler(filters.TEXT & filters.Regex(f'^{re.escape(TEXTS["buttons"]["preview"])}$'), preview_listing)
+                MessageHandler(
+                    filters.TEXT
+                    & filters.Regex(f"^{re.escape(TEXTS['buttons']['preview'])}$"),
+                    preview_listing,
+                ),
             ],
             CONFIRM: [MessageHandler(filters.TEXT & ~filters.COMMAND, confirm)],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
-        allow_reentry=True
+        allow_reentry=True,
     )
 
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(conv_handler)
 
-    # Set webhook
-    async def set_webhook():
-        await application.bot.set_webhook(f"{WEBHOOK_URL}/webhook")
+    # Set webhook URL first
+    await application.bot.set_webhook(f"{WEBHOOK_URL}/webhook")
+    logger.info(f"Webhook set to {WEBHOOK_URL}/webhook")
 
-    async def run():
-        await set_webhook()
-        await application.initialize()
-        await application.start()
-        await application.updater.start_webhook(
-            listen="0.0.0.0",
-            port=PORT,
-            url_path="webhook",
-            webhook_url=f"{WEBHOOK_URL}/webhook",
-        )
-        logger.info("Bot is running with webhook...")
-
-    asyncio.run(run())
-
-application = None
-
-def main() -> None:
-    global application
-    application = (
-        ApplicationBuilder()
-        .token(BOT_TOKEN)
-        .read_timeout(30)
-        .write_timeout(30)
-        .concurrent_updates(True)
-        .build()
+    # Run webhook server
+    await application.run_webhook(
+        listen="0.0.0.0",
+        port=PORT,
+        webhook_path="/webhook",
+        webhook_url=f"{WEBHOOK_URL}/webhook",
     )
-    ...
-    asyncio.run(run())
 
-main()
-
-
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+    asyncio.run(main())
