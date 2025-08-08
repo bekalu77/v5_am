@@ -29,6 +29,9 @@ from google.oauth2.service_account import Credentials
 
 # Import Amharic translations
 from texts_am import TEXTS
+from flask import Flask, request
+import telegram
+
 
 # Load environment variables
 load_dotenv()
@@ -36,6 +39,8 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHANNEL_ID = os.getenv("CHANNEL_ID")  # For rentals
 CHANNEL_ID2 = os.getenv("CHANNEL_ID2")  # For sales
 CREDENTIALS_JSON = os.getenv("GOOGLE_CREDENTIALS_JSON", "credentials.json")
+PORT = int(os.environ.get("PORT", 10000))
+WEBHOOK_URL = os.environ.get("WEBHOOK_URL")  # Set this in your .env or Render environment
 
 # Logging
 logging.basicConfig(
@@ -568,12 +573,12 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     return ConversationHandler.END
 
 def main() -> None:
-    # Configure application with longer timeout
     application = (
         ApplicationBuilder()
         .token(BOT_TOKEN)
         .read_timeout(30)
         .write_timeout(30)
+        .concurrent_updates(True)
         .build()
     )
 
@@ -594,21 +599,37 @@ def main() -> None:
             ],
             PHOTOS: [
                 MessageHandler(filters.PHOTO, get_photos),
-                MessageHandler(filters.TEXT & (filters.Regex(f'^{re.escape(TEXTS["buttons"]["preview"])}$')), preview_listing)
+                MessageHandler(filters.TEXT & filters.Regex(f'^{re.escape(TEXTS["buttons"]["preview"])}$'), preview_listing)
             ],
             CONFIRM: [MessageHandler(filters.TEXT & ~filters.COMMAND, confirm)],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
         allow_reentry=True
     )
-    
+
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(conv_handler)
 
-    logger.info("Bot is running...")
-    application.run_polling()
+    # Set webhook
+    async def set_webhook():
+        await application.bot.set_webhook(f"{WEBHOOK_URL}/webhook")
+
+    async def run():
+        await set_webhook()
+        await application.initialize()
+        await application.start()
+        await application.updater.start_webhook(
+            listen="0.0.0.0",
+            port=PORT,
+            url_path="webhook",
+            webhook_url=f"{WEBHOOK_URL}/webhook",
+        )
+        logger.info("Bot is running with webhook...")
+
+    asyncio.run(run())
 
 if __name__ == "__main__":
     main()
+
 
