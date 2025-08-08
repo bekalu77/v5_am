@@ -577,106 +577,95 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 logger = logging.getLogger(__name__)
 
 async def main():
-    """Main function to start the bot with proper webhook or polling setup"""
-    
-    # Validate required environment variables
-    if not BOT_TOKEN:
-        raise ValueError("No BOT_TOKEN set in environment variables")
-    
-    if WEBHOOK_URL and not WEBHOOK_URL.startswith(('http://', 'https://')):
-        raise ValueError("WEBHOOK_URL must start with http:// or https://")
-
-    # Initialize the Application
-    application = (
-        ApplicationBuilder()
-        .token(BOT_TOKEN)
-        .read_timeout(30)
-        .write_timeout(30)
-        .concurrent_updates(True)
-        .build()
-    )
-
-    # Set up conversation handler (keep your existing conv_handler code)
-    conv_handler = ConversationHandler(
-        entry_points=[CommandHandler("post", post)],
-        states={
-            RENT_SELL: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_rent_sell)],
-            PROPERTY_USE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_property_use)],
-            HOUSE_TYPE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_house_type)],
-            ROOMS: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_rooms)],
-            AREA: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_area)],
-            LOCATION: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_location)],
-            PRICE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_price)],
-            INFO: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_info)],
-            CONTACT: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, get_contact),
-                MessageHandler(filters.CONTACT, get_contact),
-            ],
-            PHOTOS: [
-                MessageHandler(filters.PHOTO, get_photos),
-                MessageHandler(
-                    filters.TEXT
-                    & filters.Regex(f"^{re.escape(TEXTS['buttons']['preview'])}$"),
-                    preview_listing,
-                ),
-            ],
-            CONFIRM: [MessageHandler(filters.TEXT & ~filters.COMMAND, confirm)],
-        },
-        fallbacks=[CommandHandler("cancel", cancel)],
-        allow_reentry=True,
-    )
-
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(conv_handler)
-
-    # Webhook configuration for production (Render)
-if WEBHOOK_URL:
-    logger.info("Configuring webhook...")
-    
-    await application.bot.set_webhook(
-        url=f"{WEBHOOK_URL}/webhook",
-        secret_token=SECRET_TOKEN,
-        drop_pending_updates=True
-    )
-    
-    logger.info(f"Webhook configured with secret token (last 5 chars): {SECRET_TOKEN[-5:]}")
-    logger.info(f"Webhook URL: {WEBHOOK_URL}/webhook")
-    
-    # Create a new event loop for webhook
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    
+    """Main async function to start the bot with proper webhook/polling setup"""
     try:
-        await application.run_webhook(
-            listen="0.0.0.0",
-            port=PORT,
-            webhook_url=f"{WEBHOOK_URL}/webhook",
-            secret_token=SECRET_TOKEN,
-            drop_pending_updates=True
+        # Validate required environment variables
+        if not BOT_TOKEN:
+            raise ValueError("No BOT_TOKEN set in environment variables")
+        
+        if WEBHOOK_URL and not WEBHOOK_URL.startswith(('http://', 'https://')):
+            raise ValueError("WEBHOOK_URL must start with http:// or https://")
+
+        # Initialize the Application
+        application = (
+            ApplicationBuilder()
+            .token(BOT_TOKEN)
+            .read_timeout(30)
+            .write_timeout(30)
+            .concurrent_updates(True)
+            .build()
         )
-    finally:
-        loop.close()
-else:
-    # Polling mode for development
-    logger.info("Starting in polling mode")
-    await application.run_polling(drop_pending_updates=True)
-    
-except Exception as e:
-logger.error(f"Bot crashed: {e}")
-raise
 
-if __name__ == "__main__":
-    # Configure logging
-    logging.basicConfig(
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        level=logging.INFO
-    )
-    logger = logging.getLogger(__name__)
-    
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        logger.info("Bot stopped by user")
+        # Set up conversation handler
+        conv_handler = ConversationHandler(
+            entry_points=[CommandHandler("post", post)],
+            states={
+                RENT_SELL: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_rent_sell)],
+                PROPERTY_USE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_property_use)],
+                HOUSE_TYPE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_house_type)],
+                ROOMS: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_rooms)],
+                AREA: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_area)],
+                LOCATION: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_location)],
+                PRICE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_price)],
+                INFO: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_info)],
+                CONTACT: [
+                    MessageHandler(filters.TEXT & ~filters.COMMAND, get_contact),
+                    MessageHandler(filters.CONTACT, get_contact),
+                ],
+                PHOTOS: [
+                    MessageHandler(filters.PHOTO, get_photos),
+                    MessageHandler(
+                        filters.TEXT & filters.Regex(f"^{re.escape(TEXTS['buttons']['preview'])}$"),
+                        preview_listing,
+                    ),
+                ],
+                CONFIRM: [MessageHandler(filters.TEXT & ~filters.COMMAND, confirm)],
+            },
+            fallbacks=[CommandHandler("cancel", cancel)],
+            allow_reentry=True,
+        )
+
+        application.add_handler(CommandHandler("start", start))
+        application.add_handler(CommandHandler("help", help_command))
+        application.add_handler(conv_handler)
+
+        # Webhook configuration for production (Render)
+        if WEBHOOK_URL:
+            logger.info("Configuring webhook...")
+            
+            # Set webhook with secret token
+            await application.bot.set_webhook(
+                url=f"{WEBHOOK_URL}/webhook",
+                secret_token=SECRET_TOKEN,
+                drop_pending_updates=True
+            )
+            
+            logger.info(f"Webhook configured with secret token (last 5 chars): {SECRET_TOKEN[-5:]}")
+            logger.info(f"Webhook URL: {WEBHOOK_URL}/webhook")
+            
+            # Run application with webhook in a dedicated event loop
+            try:
+                await application.run_webhook(
+                    listen="0.0.0.0",
+                    port=PORT,
+                    webhook_url=f"{WEBHOOK_URL}/webhook",
+                    secret_token=SECRET_TOKEN,
+                    drop_pending_updates=True
+                )
+            except asyncio.CancelledError:
+                logger.info("Webhook server stopped gracefully")
+                
+        else:
+            # Polling mode for development
+            logger.info("Starting in polling mode (no WEBHOOK_URL set)")
+            await application.run_polling(
+                drop_pending_updates=True,
+                allowed_updates=Update.ALL_TYPES
+            )
+            
     except Exception as e:
-        logger.error(f"Fatal error: {e}")
+        logger.error(f"Bot crashed: {e}")
+        raise
+    finally:
+        logger.info("Performing cleanup...")
+        # Add any additional cleanup logic here if needed
