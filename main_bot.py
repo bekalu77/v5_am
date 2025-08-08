@@ -631,71 +631,52 @@ async def main():
     application.add_handler(conv_handler)
 
     # Webhook configuration for production (Render)
-    if WEBHOOK_URL:
-        logger.info("Configuring webhook...")
-        
-        # Set webhook with secret token
-        await application.bot.set_webhook(
-            url=f"{WEBHOOK_URL}/webhook",
-            secret_token=SECRET_TOKEN,
-            drop_pending_updates=True
-        )
-        
-        logger.info(f"Webhook configured with secret token (last 5 chars): {SECRET_TOKEN[-5:]}")
-        logger.info(f"Webhook URL: {WEBHOOK_URL}/webhook")
-        
-        # Create a simple web server for Render health checks
-        from aiohttp import web
-        
-        async def handle_health_check(request):
-            return web.Response(text="Bot is running")
-        
-        app = web.Application()
-        app.router.add_get("/health", handle_health_check)
-        
-        # Start web server and webhook
-        runner = web.AppRunner(app)
-        await runner.setup()
-        site = web.TCPSite(runner, "0.0.0.0", PORT)
-        
-        try:
-            await site.start()
-            logger.info(f"Health check server running on port {PORT}")
+        if WEBHOOK_URL:
+            logger.info("Configuring webhook...")
             
-            # Run application with webhook
-            await application.run_webhook(
-                listen="0.0.0.0",
-                port=PORT,
-                webhook_url=f"{WEBHOOK_URL}/webhook",
+            await application.bot.set_webhook(
+                url=f"{WEBHOOK_URL}/webhook",
                 secret_token=SECRET_TOKEN,
                 drop_pending_updates=True
             )
-        except asyncio.CancelledError:
-            logger.info("Shutting down gracefully...")
-        finally:
-            await runner.cleanup()
             
-    else:
-        # Polling mode for development
-        logger.info("Starting in polling mode (no WEBHOOK_URL set)")
-        await application.run_polling(
-            drop_pending_updates=True,
-            allowed_updates=Update.ALL_TYPES
-        )
-
-async def shutdown():
-    """Cleanup function for graceful shutdown"""
-    logger.info("Performing cleanup before shutdown...")
-    # Add any cleanup logic here if needed
+            logger.info(f"Webhook configured with secret token (last 5 chars): {SECRET_TOKEN[-5:]}")
+            logger.info(f"Webhook URL: {WEBHOOK_URL}/webhook")
+            
+            # Create a new event loop for webhook
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+            try:
+                await application.run_webhook(
+                    listen="0.0.0.0",
+                    port=PORT,
+                    webhook_url=f"{WEBHOOK_URL}/webhook",
+                    secret_token=SECRET_TOKEN,
+                    drop_pending_updates=True
+                )
+            finally:
+                loop.close()
+        else:
+            # Polling mode for development
+            logger.info("Starting in polling mode")
+            await application.run_polling(drop_pending_updates=True)
+            
+    except Exception as e:
+        logger.error(f"Bot crashed: {e}")
+        raise
 
 if __name__ == "__main__":
+    # Configure logging
+    logging.basicConfig(
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        level=logging.INFO
+    )
+    logger = logging.getLogger(__name__)
+    
     try:
-        logger.info("Starting bot...")
         asyncio.run(main())
     except KeyboardInterrupt:
         logger.info("Bot stopped by user")
     except Exception as e:
-        logger.error(f"Bot crashed: {e}")
-        raise
-    finally:
-        asyncio.run(shutdown())
+        logger.error(f"Fatal error: {e}")
