@@ -647,6 +647,8 @@ async def main():
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(conv_handler)
+    application.add_handler(CommandHandler("preview", show_preview))  #new added preview comand 
+
 
     # Start the application but DO NOT call run_webhook or run_polling
     await application.initialize()
