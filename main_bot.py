@@ -579,8 +579,6 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 logger = logging.getLogger(__name__)
 
 async def main():
-    """Main async function with proper application lifecycle management"""
-    # Initialize the Application
     application = (
         ApplicationBuilder()
         .token(BOT_TOKEN)
@@ -590,7 +588,6 @@ async def main():
         .build()
     )
 
-    # Set up conversation handler
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("post", post)],
         states={
@@ -623,57 +620,24 @@ async def main():
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(conv_handler)
 
-    # Webhook configuration
-    if WEBHOOK_URL:
-        logger.info("Configuring webhook...")
-        await application.bot.set_webhook(
-            url=f"{WEBHOOK_URL}/webhook",
-            secret_token=SECRET_TOKEN,
-            drop_pending_updates=True
-        )
-        logger.info(f"Webhook configured with secret token (last 5 chars): {SECRET_TOKEN[-5:]}")
-        
-        # Create a simple HTTP server for Render health checks
-        async def health_check(request):
-            return web.Response(text="Bot is running")
-
-        app = web.Application()
-        app.router.add_get("/health", health_check)
-        runner = web.AppRunner(app)
-        await runner.setup()
-        site = web.TCPSite(runner, "0.0.0.0", PORT)
-        
-        try:
-            await site.start()
-            logger.info(f"Health check server running on port {PORT}")
-            await application.run_webhook(
-                listen="0.0.0.0",
-                port=PORT,
-                webhook_url=f"{WEBHOOK_URL}/webhook",
-                secret_token=SECRET_TOKEN,
-                drop_pending_updates=True
-            )
-        except asyncio.CancelledError:
-            logger.info("Received shutdown signal")
-        finally:
-            await runner.cleanup()
-    else:
-        # Polling mode for development
-        logger.info("Starting in polling mode")
-        await application.run_polling()
+    logger.info("Starting bot in webhook mode for Render...")
+    await application.run_webhook(
+        listen="0.0.0.0",
+        port=PORT,
+        url_path=SECRET_TOKEN,
+        webhook_url=f"{WEBHOOK_URL}/{SECRET_TOKEN}",
+        secret_token=SECRET_TOKEN,
+        drop_pending_updates=True
+    )
 
 if __name__ == "__main__":
-    # Configure logging
     logging.basicConfig(
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         level=logging.INFO
     )
     logger = logging.getLogger(__name__)
-    
+
     try:
         asyncio.run(main())
-    except KeyboardInterrupt:
-        logger.info("Bot stopped by user")
-    except Exception as e:
-        logger.error(f"Fatal error: {e}")
-        raise
+    except (KeyboardInterrupt, SystemExit):
+        logger.info("Bot stopped")
