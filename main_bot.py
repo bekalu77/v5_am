@@ -578,16 +578,27 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 logger = logging.getLogger(__name__)
 
+
+
+async def handle_webhook(request: web.Request):
+    """Handle incoming webhook updates."""
+    bot = request.app['bot']
+    data = await request.json()
+    update = telegram.Update.de_json(data, bot)
+    await request.app['application'].update_queue.put(update)
+    return web.Response(text="OK")
+
+async def health_check(request):
+    return web.Response(text="Bot is running")
+
 async def main():
     application = (
         ApplicationBuilder()
         .token(BOT_TOKEN)
-        .read_timeout(30)
-        .write_timeout(30)
-        .concurrent_updates(True)
         .build()
     )
 
+    # Add handlers like before
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("post", post)],
         states={
@@ -620,18 +631,41 @@ async def main():
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(conv_handler)
 
-    logger.info("Starting bot in webhook mode for Render...")
-    await application.run_webhook(
-        listen="0.0.0.0",
-        port=PORT,
-        url_path=SECRET_TOKEN,
-        webhook_url=f"{WEBHOOK_URL}/{SECRET_TOKEN}",
-        secret_token=SECRET_TOKEN,
-        drop_pending_updates=True
-    )
+    # Start the application but DO NOT call run_webhook or run_polling
+    await application.initialize()
+    await application.start()
+
+    # Set the webhook manually
+    await application.bot.set_webhook(f"{WEBHOOK_URL}/webhook", drop_pending_updates=True)
+
+    # Setup aiohttp server
+    app = web.Application()
+    app['bot'] = application.bot
+    app['application'] = application
+    app.router.add_post("/webhook", handle_webhook)
+    app.router.add_get("/health", health_check)
+
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", PORT)
+    await site.start()
+
+    print(f"Webhook server running on port {PORT}")
+
+    # Run forever, until cancelled
+    try:
+        while True:
+            await asyncio.sleep(3600)
+    except asyncio.CancelledError:
+        pass
+    finally:
+        await application.stop()
+        await application.shutdown()
+        await runner.cleanup()
 
 if __name__ == "__main__":
     import asyncio
+    import logging
     import sys
 
     logging.basicConfig(
@@ -640,12 +674,12 @@ if __name__ == "__main__":
     )
     logger = logging.getLogger(__name__)
 
+    loop = asyncio.get_event_loop()
     try:
-        loop = asyncio.get_event_loop()
-        loop.create_task(main())
+        loop.run_until_complete(main())
         loop.run_forever()
-    except (KeyboardInterrupt, SystemExit):
-        logger.info("Bot stopped")
+    except KeyboardInterrupt:
+        logger.info("Bot stopped by user")
     except Exception as e:
         logger.error(f"Fatal error: {e}")
         sys.exit(1)
