@@ -631,13 +631,22 @@ async def main():
     )
 
 if __name__ == "__main__":
+    import asyncio
+    import sys
+
     logging.basicConfig(
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        level=logging.INFO
+        level=logging.INFO,
     )
     logger = logging.getLogger(__name__)
 
     try:
-        asyncio.run(main())
+        loop = asyncio.get_event_loop()
+        loop.create_task(main())
+        loop.run_forever()
     except (KeyboardInterrupt, SystemExit):
         logger.info("Bot stopped")
+    except Exception as e:
+        logger.error(f"Fatal error: {e}")
+        sys.exit(1)
+
