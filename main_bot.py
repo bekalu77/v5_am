@@ -140,16 +140,14 @@ CONFIRM_BUTTONS = create_keyboard([["confirm", "cancel"]])
 # ======================================================================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     # --- Cleanup like /cancel ---
-    # Clear any user data
     context.user_data.clear()
     context.chat_data.clear()
 
-    # If you're using ConversationHandler, also end any running conversation
-    await update.message.reply_text(TEXTS["messages"]["cancel"], reply_markup=ReplyKeyboardRemove())
+    # Notify the user old conversation was canceled
+    await update.message.reply_text(TEXTS["messages"]["canceled"], reply_markup=ReplyKeyboardRemove())
 
     # --- Start fresh ---
     await retry_telegram_request(update.message.reply_text, TEXTS["messages"]["start"])
-
 
 async def post(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     context.user_data.clear()
