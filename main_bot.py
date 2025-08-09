@@ -139,7 +139,17 @@ CONFIRM_BUTTONS = create_keyboard([["confirm", "cancel"]])
 # CONVERSATION HANDLERS (UPDATED WITH AMHARIC TEXT REFERENCES)
 # ======================================================================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    # --- Cleanup like /cancel ---
+    # Clear any user data
+    context.user_data.clear()
+    context.chat_data.clear()
+
+    # If you're using ConversationHandler, also end any running conversation
+    await update.message.reply_text(TEXTS["messages"]["cancel"], reply_markup=ReplyKeyboardRemove())
+
+    # --- Start fresh ---
     await retry_telegram_request(update.message.reply_text, TEXTS["messages"]["start"])
+
 
 async def post(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     context.user_data.clear()
@@ -563,14 +573,23 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
             os.remove(photo_path)
         except OSError:
             pass
-    
-    await retry_telegram_request(
-        update.message.reply_text,
-        TEXTS["messages"]["canceled"],
-        reply_markup=ReplyKeyboardRemove()
-    )
+
+    # Clear all per-user and per-chat data
     context.user_data.clear()
+    context.chat_data.clear()
+
+    # Inform the user
+    try:
+        await retry_telegram_request(
+            update.message.reply_text,
+            TEXTS["messages"]["canceled"],
+            reply_markup=ReplyKeyboardRemove()
+        )
+    except Exception as e:
+        logger.warning(f"Failed to send cancel message: {e}")
+
     return ConversationHandler.END
+
 
 
 
