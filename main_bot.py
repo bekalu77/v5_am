@@ -144,7 +144,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     context.chat_data.clear()
 
     # Notify the user old conversation was canceled
-    await update.message.reply_text(TEXTS["messages"]["canceled"], reply_markup=ReplyKeyboardRemove())
+    # await update.message.reply_text(TEXTS["messages"]["canceled"], reply_markup=ReplyKeyboardRemove())
 
     # --- Start fresh ---
     await retry_telegram_request(update.message.reply_text, TEXTS["messages"]["start"])
