@@ -413,7 +413,7 @@ async def preview_listing(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     # Escape user inputs for safety
     def esc(txt): return html.escape(str(txt))
     
-    # Build caption
+    # Build caption (same for both user preview and channel post)
     caption = TEXTS["messages"]["preview_title"]
     caption += TEXTS["messages"]["property_id"].format(esc(data["property_id"]))
     caption += TEXTS["messages"]["rent_or_sell"].format(esc(data["rent_or_sell"]))
@@ -435,7 +435,7 @@ async def preview_listing(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     caption += TEXTS["messages"]["posted_by"].format(esc(username))
     caption += TEXTS["messages"]["date"].format(esc(data["date"]))
     caption += "\n\n" + TEXTS["messages"]["footer"]
-    
+
     # Determine which channel to post to based on rent/sell
     channel_id = CHANNEL_ID2 if data["rent_or_sell"] == TEXTS["buttons"]["sell"] else CHANNEL_ID
     
@@ -447,7 +447,7 @@ async def preview_listing(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 with open(photo_path, "rb") as photo_file:
                     media.append(InputMediaPhoto(
                         media=photo_file,
-                        caption=channel_caption if i == 0 else None,
+                        caption=caption if i == 0 else None,  # Fixed: using caption instead of channel_caption
                         parse_mode=ParseMode.HTML
                     ))
             await retry_telegram_request(
@@ -460,14 +460,14 @@ async def preview_listing(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             await retry_telegram_request(
                 context.bot.send_message,
                 chat_id=channel_id,
-                text=channel_caption,
+                text=caption,  # Fixed: using caption instead of channel_caption
                 parse_mode=ParseMode.HTML
             )
     else:
         await retry_telegram_request(
             context.bot.send_message,
             chat_id=channel_id,
-            text=channel_caption,
+            text=caption,  # Fixed: using caption instead of channel_caption
             parse_mode=ParseMode.HTML
         )
     
@@ -508,10 +508,10 @@ async def preview_listing(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     else:
         return ConversationHandler.END
 
-# Modify the command handler to set in_conversation flag
 async def preview_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     context.user_data["in_conversation"] = False
     await preview_listing(update, context)
+
 
 
 async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
