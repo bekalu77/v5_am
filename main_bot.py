@@ -413,7 +413,7 @@ async def preview_listing(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     # Escape user inputs for safety
     def esc(txt): return html.escape(str(txt))
     
-    # Build caption (same for both user preview and channel post)
+    # Build caption
     caption = TEXTS["messages"]["preview_title"]
     caption += TEXTS["messages"]["property_id"].format(esc(data["property_id"]))
     caption += TEXTS["messages"]["rent_or_sell"].format(esc(data["rent_or_sell"]))
@@ -436,41 +436,6 @@ async def preview_listing(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     caption += TEXTS["messages"]["date"].format(esc(data["date"]))
     caption += "\n\n" + TEXTS["messages"]["footer"]
 
-    # Determine which channel to post to based on rent/sell
-    channel_id = CHANNEL_ID2 if data["rent_or_sell"] == TEXTS["buttons"]["sell"] else CHANNEL_ID
-    
-    # Post to channel (whether from button or command)
-    if data.get("photos"):
-        try:
-            media = []
-            for i, photo_path in enumerate(data["photos"]):
-                with open(photo_path, "rb") as photo_file:
-                    media.append(InputMediaPhoto(
-                        media=photo_file,
-                        caption=caption if i == 0 else None,  # Fixed: using caption instead of channel_caption
-                        parse_mode=ParseMode.HTML
-                    ))
-            await retry_telegram_request(
-                context.bot.send_media_group,
-                chat_id=channel_id,
-                media=media
-            )
-        except Exception as e:
-            logger.error(f"Error sending media to channel: {e}")
-            await retry_telegram_request(
-                context.bot.send_message,
-                chat_id=channel_id,
-                text=caption,  # Fixed: using caption instead of channel_caption
-                parse_mode=ParseMode.HTML
-            )
-    else:
-        await retry_telegram_request(
-            context.bot.send_message,
-            chat_id=channel_id,
-            text=caption,  # Fixed: using caption instead of channel_caption
-            parse_mode=ParseMode.HTML
-        )
-    
     # Send preview to user
     if data.get("photos"):
         try:
@@ -497,22 +462,13 @@ async def preview_listing(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             parse_mode=ParseMode.HTML
         )
 
-    # Only show confirm buttons if coming from conversation flow
-    if context.user_data.get("in_conversation", True):
-        await retry_telegram_request(
-            update.message.reply_text,
-            TEXTS["messages"]["confirm_prompt"],
-            reply_markup=CONFIRM_BUTTONS
-        )
-        return CONFIRM
-    else:
-        return ConversationHandler.END
-
-async def preview_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    context.user_data["in_conversation"] = False
-    await preview_listing(update, context)
-
-
+    # Always show confirm buttons after preview
+    await retry_telegram_request(
+        update.message.reply_text,
+        TEXTS["messages"]["confirm_prompt"],
+        reply_markup=CONFIRM_BUTTONS
+    )
+    return CONFIRM
 
 async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user_input = update.message.text
@@ -520,7 +476,55 @@ async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         return await cancel(update, context)
     
     data = context.user_data
+    
+    # Check if already posted (prevent duplicates)
+    if data.get("posted_to_channel"):
+        await retry_telegram_request(
+            update.message.reply_text,
+            TEXTS["messages"]["already_posted"],
+            reply_markup=ReplyKeyboardRemove()
+        )
+        return ConversationHandler.END
+    
     try:
+        # Determine which channel to post to based on rent/sell
+        channel_id = CHANNEL_ID2 if data["rent_or_sell"] == TEXTS["buttons"]["sell"] else CHANNEL_ID
+        
+        # Post to channel
+        if data.get("photos"):
+            try:
+                media = []
+                for i, photo_path in enumerate(data["photos"]):
+                    with open(photo_path, "rb") as photo_file:
+                        media.append(InputMediaPhoto(
+                            media=photo_file,
+                            caption=caption if i == 0 else None,
+                            parse_mode=ParseMode.HTML
+                        ))
+                await retry_telegram_request(
+                    context.bot.send_media_group,
+                    chat_id=channel_id,
+                    media=media
+                )
+            except Exception as e:
+                logger.error(f"Error sending media to channel: {e}")
+                await retry_telegram_request(
+                    context.bot.send_message,
+                    chat_id=channel_id,
+                    text=caption,
+                    parse_mode=ParseMode.HTML
+                )
+        else:
+            await retry_telegram_request(
+                context.bot.send_message,
+                chat_id=channel_id,
+                text=caption,
+                parse_mode=ParseMode.HTML
+            )
+        
+        # Mark as posted to prevent duplicates
+        data["posted_to_channel"] = True
+        
         # Save to Google Sheets
         row = [
             data["property_id"],
@@ -543,66 +547,6 @@ async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
             
         worksheet.append_row(row)
         logger.info(f"Saved to Google Sheets: {data['property_id']}")
-        
-        # Prepare channel post (same as preview but without ID)
-        # Escape user inputs for safety
-        def esc(txt): return html.escape(str(txt))
-        
-        # Build channel caption
-        channel_caption = TEXTS["messages"]["preview_title"]
-        channel_caption += TEXTS["messages"]["rent_or_sell"].format(esc(data["rent_or_sell"]))
-        channel_caption += TEXTS["messages"]["property_use"].format(esc(data["property_use"]))
-        
-        if "house_type" in data:
-            channel_caption += TEXTS["messages"]["house_type"].format(esc(data["house_type"]))
-        if "rooms" in data:
-            channel_caption += TEXTS["messages"]["rooms"].format(esc(data["rooms"]))
-            
-        channel_caption += TEXTS["messages"]["area"].format(esc(data["area"]))
-        channel_caption += TEXTS["messages"]["location"].format(esc(data["location"]))
-        channel_caption += TEXTS["messages"]["price"].format(esc(data["price"]))
-        channel_caption += TEXTS["messages"]["details"].format(esc(data["info"]))
-        channel_caption += TEXTS["messages"]["contact"].format(esc(data["contact"]))
-        
-        username = update.message.from_user.username or str(data["posted_by"])
-        channel_caption += TEXTS["messages"]["posted_by"].format(esc(username))
-        channel_caption += TEXTS["messages"]["date"].format(esc(data["date"]))
-        channel_caption += "\n\n" + TEXTS["messages"]["footer"]
-        
-        # Determine which channel to post to based on rent/sell
-        channel_id = CHANNEL_ID2 if data["rent_or_sell"] == TEXTS["buttons"]["sell"] else CHANNEL_ID
-        
-        # Post to channel
-        if data.get("photos"):
-            try:
-                media = []
-                for i, photo_path in enumerate(data["photos"]):
-                    with open(photo_path, "rb") as photo_file:
-                        media.append(InputMediaPhoto(
-                            media=photo_file,
-                            caption=channel_caption if i == 0 else None,
-                            parse_mode=ParseMode.HTML
-                        ))
-                await retry_telegram_request(
-                    context.bot.send_media_group,
-                    chat_id=channel_id,
-                    media=media
-                )
-            except Exception as e:
-                logger.error(f"Error sending media to channel: {e}")
-                await retry_telegram_request(
-                    context.bot.send_message,
-                    chat_id=channel_id,
-                    text=channel_caption,
-                    parse_mode=ParseMode.HTML
-                )
-        else:
-            await retry_telegram_request(
-                context.bot.send_message,
-                chat_id=channel_id,
-                text=channel_caption,
-                parse_mode=ParseMode.HTML
-            )
         
         # Cleanup photos
         for photo_path in data.get("photos", []):
@@ -627,6 +571,10 @@ async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     
     context.user_data.clear()
     return ConversationHandler.END
+
+async def preview_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await preview_listing(update, context)
+
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     # Cleanup any uploaded photos
