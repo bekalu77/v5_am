@@ -478,6 +478,38 @@ async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         return ConversationHandler.END
     
     try:
+        # Rebuild caption to ensure we have all fields
+        def esc(txt): return html.escape(str(txt))
+        caption = TEXTS["messages"]["preview_title"]
+        caption += TEXTS["messages"]["property_id"].format(esc(data["property_id"]))
+        caption += TEXTS["messages"]["rent_or_sell"].format(esc(data["rent_or_sell"]))
+        caption += TEXTS["messages"]["property_use"].format(esc(data["property_use"]))
+        if "house_type" in data:
+            caption += TEXTS["messages"]["house_type"].format(esc(data["house_type"]))
+        if "rooms" in data:
+            caption += TEXTS["messages"]["rooms"].format(esc(data["rooms"]))
+        caption += TEXTS["messages"]["area"].format(esc(data["area"]))
+        caption += TEXTS["messages"]["location"].format(esc(data["location"]))
+        caption += TEXTS["messages"]["price"].format(esc(data["price"]))
+        caption += TEXTS["messages"]["details"].format(esc(data["info"]))
+        caption += TEXTS["messages"]["contact"].format(esc(data["contact"]))
+        username = update.message.from_user.username or str(data["posted_by"])
+        caption += TEXTS["messages"]["posted_by"].format(esc(username))
+        caption += TEXTS["messages"]["date"].format(esc(data["date"]))
+        caption += "\n\n" + TEXTS["messages"]["footer"]
+
+        # [Rest of your existing confirm code...]
+    
+    # Check if already posted (prevent duplicates)
+    if data.get("posted_to_channel"):
+        await retry_telegram_request(
+            update.message.reply_text,
+            TEXTS["messages"]["already_posted"],
+            reply_markup=ReplyKeyboardRemove()
+        )
+        return ConversationHandler.END
+    
+    try:
         # Determine which channel to post to based on rent/sell
         channel_id = CHANNEL_ID2 if data["rent_or_sell"] == TEXTS["buttons"]["sell"] else CHANNEL_ID
         
@@ -564,6 +596,14 @@ async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     return ConversationHandler.END
 
 async def preview_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    # Initialize all required fields if they don't exist
+    if "property_id" not in context.user_data:
+        context.user_data["property_id"] = str(uuid.uuid4().hex)[:8].upper()
+    if "date" not in context.user_data:
+        context.user_data["date"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+    if "posted_by" not in context.user_data:
+        context.user_data["posted_by"] = update.message.from_user.id
+    
     # Set the conversation state to PHOTOS to maintain continuity
     context.user_data["_conversation_state"] = PHOTOS
     await preview_listing(update, context)
