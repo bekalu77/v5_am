@@ -362,18 +362,13 @@ async def get_photos(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         await photo_file.download_to_drive(photo_path)
         context.user_data["photos"].append(photo_path)
         
-        # Send appropriate response
-        remaining = 3 - len(context.user_data["photos"])
-        if remaining > 0:
-            message = f"{TEXTS['messages']['photo_added'].format(remaining)}\n\n{TEXTS['messages']['ask_photos']}"
-        else:
-            message = TEXTS["messages"]["all_photos_added"]
-        
-        await retry_telegram_request(
-            update.message.reply_text,
-            message,
-            reply_markup=PREVIEW_BUTTON
-        )
+        # Only send message when all 3 photos are added
+        if len(context.user_data["photos"]) == 3:
+            await retry_telegram_request(
+                update.message.reply_text,
+                TEXTS["messages"]["all_photos_added"],
+                reply_markup=PREVIEW_BUTTON
+            )
         
         return PHOTOS
         
