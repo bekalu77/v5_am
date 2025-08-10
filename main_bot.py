@@ -390,10 +390,12 @@ async def get_photos(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 async def preview_listing(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     data = context.user_data
     
-    # Check if we have enough data to preview
-    if not all(field in data for field in ["rent_or_sell", "property_use", "area", "location", "price", "info", "contact"]):
+    # Check required fields
+    required_fields = ["rent_or_sell", "property_use", "area", "location", "price", "info", "contact"]
+    if not all(field in data for field in required_fields):
         await update.message.reply_text(TEXTS["messages"]["incomplete_data"])
         return ConversationHandler.END
+
     
     # Generate ID and date if they don't exist
     if "property_id" not in data:
@@ -585,7 +587,7 @@ async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 
 async def preview_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    # Initialize all required fields if they don't exist
+    # Ensure we have all required fields
     if "property_id" not in context.user_data:
         context.user_data["property_id"] = str(uuid.uuid4().hex)[:8].upper()
     if "date" not in context.user_data:
@@ -593,8 +595,8 @@ async def preview_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     if "posted_by" not in context.user_data:
         context.user_data["posted_by"] = update.message.from_user.id
     
-    # Set the conversation state to PHOTOS to maintain continuity
-    context.user_data["_conversation_state"] = PHOTOS
+    # Set the conversation state to CONFIRM
+    context.user_data["_conversation_state"] = CONFIRM
     await preview_listing(update, context)
 
 
