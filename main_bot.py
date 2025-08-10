@@ -387,14 +387,28 @@ async def get_photos(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         return PHOTOS
 
 
-async def preview_command(update: Update, context: ContextTypes.DEFAULT_TYPE):  #NEW
-    # Just call the same function as the button
-    await preview_listing(update, context) #NEW
-        
 async def preview_listing(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     data = context.user_data
-    data["property_id"] = str(uuid.uuid4().hex)[:8].upper()
-    data["date"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+    
+    # Don't proceed if we don't have enough data
+    required_fields = [
+        "rent_or_sell", "property_use", "area", "location", 
+        "price", "info", "contact", "posted_by"
+    ]
+    
+    if not all(field in data for field in required_fields):
+        await retry_telegram_request(
+            update.message.reply_text,
+            TEXTS["messages"]["incomplete_data"],
+            reply_markup=ReplyKeyboardRemove()
+        )
+        return ConversationHandler.END
+    
+    # Generate ID and date if they don't exist
+    if "property_id" not in data:
+        data["property_id"] = str(uuid.uuid4().hex)[:8].upper()
+    if "date" not in data:
+        data["date"] = datetime.now().strftime("%Y-%m-%d %H:%M")
     
     # Escape user inputs for safety
     def esc(txt): return html.escape(str(txt))
@@ -421,7 +435,43 @@ async def preview_listing(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     caption += TEXTS["messages"]["posted_by"].format(esc(username))
     caption += TEXTS["messages"]["date"].format(esc(data["date"]))
     caption += "\n\n" + TEXTS["messages"]["footer"]
-    # Send preview
+    
+    # Determine which channel to post to based on rent/sell
+    channel_id = CHANNEL_ID2 if data["rent_or_sell"] == TEXTS["buttons"]["sell"] else CHANNEL_ID
+    
+    # Post to channel (whether from button or command)
+    if data.get("photos"):
+        try:
+            media = []
+            for i, photo_path in enumerate(data["photos"]):
+                with open(photo_path, "rb") as photo_file:
+                    media.append(InputMediaPhoto(
+                        media=photo_file,
+                        caption=channel_caption if i == 0 else None,
+                        parse_mode=ParseMode.HTML
+                    ))
+            await retry_telegram_request(
+                context.bot.send_media_group,
+                chat_id=channel_id,
+                media=media
+            )
+        except Exception as e:
+            logger.error(f"Error sending media to channel: {e}")
+            await retry_telegram_request(
+                context.bot.send_message,
+                chat_id=channel_id,
+                text=channel_caption,
+                parse_mode=ParseMode.HTML
+            )
+    else:
+        await retry_telegram_request(
+            context.bot.send_message,
+            chat_id=channel_id,
+            text=channel_caption,
+            parse_mode=ParseMode.HTML
+        )
+    
+    # Send preview to user
     if data.get("photos"):
         try:
             media = []
@@ -447,12 +497,22 @@ async def preview_listing(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             parse_mode=ParseMode.HTML
         )
 
-    await retry_telegram_request(
-        update.message.reply_text,
-        TEXTS["messages"]["confirm_prompt"],
-        reply_markup=CONFIRM_BUTTONS
-    )
-    return CONFIRM
+    # Only show confirm buttons if coming from conversation flow
+    if context.user_data.get("in_conversation", True):
+        await retry_telegram_request(
+            update.message.reply_text,
+            TEXTS["messages"]["confirm_prompt"],
+            reply_markup=CONFIRM_BUTTONS
+        )
+        return CONFIRM
+    else:
+        return ConversationHandler.END
+
+# Modify the command handler to set in_conversation flag
+async def preview_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    context.user_data["in_conversation"] = False
+    await preview_listing(update, context)
+
 
 async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user_input = update.message.text
