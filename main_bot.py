@@ -468,16 +468,16 @@ async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     
     data = context.user_data
     
-    # Check if already posted (prevent duplicates)
-    if data.get("posted_to_channel"):
-        await retry_telegram_request(
-            update.message.reply_text,
-            TEXTS["messages"]["already_posted"],
-            reply_markup=ReplyKeyboardRemove()
-        )
-        return ConversationHandler.END
-    
     try:
+        # Check if already posted (prevent duplicates)
+        if data.get("posted_to_channel"):
+            await retry_telegram_request(
+                update.message.reply_text,
+                TEXTS["messages"]["already_posted"],
+                reply_markup=ReplyKeyboardRemove()
+            )
+            return ConversationHandler.END
+        
         # Rebuild caption to ensure we have all fields
         def esc(txt): return html.escape(str(txt))
         caption = TEXTS["messages"]["preview_title"]
@@ -498,18 +498,6 @@ async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         caption += TEXTS["messages"]["date"].format(esc(data["date"]))
         caption += "\n\n" + TEXTS["messages"]["footer"]
 
-        # [Rest of your existing confirm code...]
-    
-    # Check if already posted (prevent duplicates)
-    if data.get("posted_to_channel"):
-        await retry_telegram_request(
-            update.message.reply_text,
-            TEXTS["messages"]["already_posted"],
-            reply_markup=ReplyKeyboardRemove()
-        )
-        return ConversationHandler.END
-    
-    try:
         # Determine which channel to post to based on rent/sell
         channel_id = CHANNEL_ID2 if data["rent_or_sell"] == TEXTS["buttons"]["sell"] else CHANNEL_ID
         
@@ -594,6 +582,7 @@ async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     
     context.user_data.clear()
     return ConversationHandler.END
+
 
 async def preview_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     # Initialize all required fields if they don't exist
