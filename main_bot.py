@@ -385,6 +385,11 @@ async def get_photos(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
             reply_markup=PREVIEW_BUTTON
         )
         return PHOTOS
+
+
+async def preview_command(update: Update, context: ContextTypes.DEFAULT_TYPE):  #NEW
+    # Just call the same function as the button
+    await preview_listing(update, context) #NEW
         
 async def preview_listing(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     data = context.user_data
@@ -647,7 +652,7 @@ async def main():
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(conv_handler)
-    application.add_handler(CommandHandler("preview", preview_listing))  #new added preview comand 
+    application.add_handler(CommandHandler("preview", preview_command))  #new added preview comand 
 
 
     # Start the application but DO NOT call run_webhook or run_polling
