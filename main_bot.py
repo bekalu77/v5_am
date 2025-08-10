@@ -390,18 +390,9 @@ async def get_photos(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 async def preview_listing(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     data = context.user_data
     
-    # Don't proceed if we don't have enough data
-    required_fields = [
-        "rent_or_sell", "property_use", "area", "location", 
-        "price", "info", "contact", "posted_by"
-    ]
-    
-    if not all(field in data for field in required_fields):
-        await retry_telegram_request(
-            update.message.reply_text,
-            TEXTS["messages"]["incomplete_data"],
-            reply_markup=ReplyKeyboardRemove()
-        )
+    # Check if we have enough data to preview
+    if not all(field in data for field in ["rent_or_sell", "property_use", "area", "location", "price", "info", "contact"]):
+        await update.message.reply_text(TEXTS["messages"]["incomplete_data"])
         return ConversationHandler.END
     
     # Generate ID and date if they don't exist
@@ -573,6 +564,8 @@ async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     return ConversationHandler.END
 
 async def preview_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    # Set the conversation state to PHOTOS to maintain continuity
+    context.user_data["_conversation_state"] = PHOTOS
     await preview_listing(update, context)
 
 
